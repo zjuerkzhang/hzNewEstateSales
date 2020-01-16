@@ -6,12 +6,14 @@ import codecs
 import time
 import os
 import datetime
+import json
 
 selfDir = os.path.dirname(os.path.abspath(__file__))
 logToFile = 0
 gLogFile = 'log.log'
 gWebLinkScheme = 'http://www.tmsf.com/yh/2018yh/%4d_%d_preview.htm'
 xmlDir = selfDir + '/../xml/'
+jsonFilePath = selfDir + '/../json/estateSaleInfo.json'
 attrNames = [
     'name',             # 楼盘名
     'distArea',         # 所属城区
@@ -49,23 +51,29 @@ def fetchContentFromLink(link, json = False):
         debugTrace("Fail to get %s, status code: %d" % (link, r.status_code))
 
 def parseTrToSaleElement(tr):
-    elem = []
+    elem = {}
     tds = tr.find_all('td')
-    for td in tds:
-        brs = td.find_all('br')
+    idxes = range(len(tds))
+    for i in idxes:
+        brs = tds[i].find_all('br')
         for br in brs:
             br.decompose()
-        elem.append(''.join(map(lambda x: x.string, td.contents)))
+        elem[attrNames[i]] = (''.join(map(lambda x: x.string, tds[i].contents)))
+    elem['location'] = {
+        'latitude': '',
+        'longitude': ''
+    }
     return elem
 
 def parseTableHeader(tr):
-    tblHeader = []
+    tblHeader = {}
     ths = tr.find_all('th')
-    for th in ths:
-        brs = th.find_all('br')
+    idxes = range(len(ths))
+    for i in idxes:
+        brs = ths[i].find_all('br')
         for br in brs:
             br.decompose()
-        tblHeader.append(''.join(map(lambda x: x.string, th.contents)))
+        tblHeader[attrNames[i]] = (''.join(map(lambda x: x.string, ths[i].contents)))
     return tblHeader
 
 def getRealEstateSaleInfoFromPage(pageLink):
@@ -113,10 +121,21 @@ def generateXmlFile(estateSaleInfo):
     xmlFileName = xmlDir + ('%4d%02d.xml' % (estateSaleInfo['year'], estateSaleInfo['month']))
     tree.write(xmlFileName, encoding = 'utf-8', xml_declaration=True)
 
+def generateJsonFile(estateSaleInfo):
+    with open(jsonFilePath, 'w') as f:
+        json.dump(estateSaleInfo, f)
+
+def loadJsonFile():
+    #return {}
+    if not os.path.exists(jsonFilePath):
+        return {}
+    with open(jsonFilePath, 'r') as f:
+        return json.load(f)
+
 def generateWebLink(year, month):
     return (gWebLinkScheme % (year, month))
 
-def generateSaleInfoXmlByYearMonth(year, month):
+def getSaleInfoByYearMonth(year, month):
     link = generateWebLink(year, month)
     estateSaleInfo = getRealEstateSaleInfoFromPage(link)
     estateSaleInfo['year'] = year
@@ -129,14 +148,35 @@ def generateSaleInfoXmlByYearMonth(year, month):
         formatStr = ''
         for y in elem:
             formatStr = formatStr + y + '\t'
+    return estateSaleInfo
     #    print(formatStr)
-    generateXmlFile(estateSaleInfo)
+
+def getNextMonth(currentMonth):
+    if currentMonth[1] == 12:
+        return [currentMonth[0] + 1, 1]
+    else:
+        return [currentMonth[0], currentMonth[1] + 1]
+
+def isTodayInGivenMonth(month):
+    today = datetime.date.today()
+    if month[0] == today.year and month[1] == today.month:
+        return True
+    else:
+        return False
 
 if __name__ == '__main__':
-    #year = 2019
-    #for month in range(1, 13):
-    #    estateSaleInfo = generateSaleInfoXmlByYearMonth(year, month)
-    today = datetime.date.today()
-    generateSaleInfoXmlByYearMonth(today.year, today.month)
+    estateSaleInfo = {}
+    oldInfo = loadJsonFile()
+    month = [2019, 1]
+    while not isTodayInGivenMonth(month):
+        keyStr = '%4d%02d' % (month[0], month[1])
+        if keyStr in oldInfo.keys():
+            estateSaleInfo[keyStr] = oldInfo[keyStr]
+        else:
+            estateSaleInfo[keyStr] = getSaleInfoByYearMonth(month[0], month[1])
+        month = getNextMonth(month)
+    keyStr = '%4d%02d' % (month[0], month[1])
+    estateSaleInfo[keyStr] = getSaleInfoByYearMonth(month[0], month[1])
+    generateJsonFile(estateSaleInfo)
 
 
