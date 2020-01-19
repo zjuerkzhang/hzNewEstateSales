@@ -123,7 +123,7 @@ def generateXmlFile(estateSaleInfo):
 
 def generateJsonFile(estateSaleInfo):
     with open(jsonFilePath, 'w') as f:
-        json.dump(estateSaleInfo, f)
+        json.dump(estateSaleInfo, f, indent = 4, encoding="utf-8")
 
 def loadJsonFile():
     #return {}

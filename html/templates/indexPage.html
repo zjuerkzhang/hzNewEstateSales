@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <style>
+      #container {width:100%; height: 640px; }
+    </style>
+    <script type="text/javascript" src="https://webapi.amap.com/maps?v=1.4.15&key=576a871f42566481a9afb60c684b4ab4"></script>
+    <title>杭州新房销售摇号地图</title>
+  </head>
+  <body>
+    <div id="container"></div>
+    <script type="text/javascript">
+
+      function drawEstatePoints(map) {
+        function formatPosition(location) {
+          if (location.latitude == '') {
+            return [];
+          }
+          return [location.longitude, location.latitude];
+        }
+        function formatTitle(info) {
+          return info.name + '\n' +
+                  info.unitPrice + '\n' +
+                  info.percentHit;
+        }
+
+        var request = new XMLHttpRequest();
+        request.onreadystatechange = function (){
+          if (request.readyState === 4) {
+            if (request.status === 200 || request.status === 304 ) {
+              var dates = JSON.parse(request.responseText);
+              dates['202001'].infos.forEach(
+                function(info) {
+                  position = formatPosition(info.location);
+                  if (position.length == 2) {
+                    addMark(map, position, formatTitle(info));
+                  }
+                }
+              );
+            }
+          }
+        };
+        request.open('GET', './static/json/estateSaleInfo.json');
+        request.send();
+      }
+
+      function addMark(map, posi, title) {
+        var marker = new AMap.Marker(
+          {
+            position: posi,
+            title: title
+          }
+        );
+        map.add(marker);
+      }
+
+      var map = new AMap.Map('container', {
+        zoom:10,//级别
+        center: [120.163302,30.271009]//中心点坐标
+      });
+      drawEstatePoints(map)
+    </script>
+  </body>
+</html>
