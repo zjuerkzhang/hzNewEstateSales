@@ -14,6 +14,7 @@ selfDir = os.path.dirname(os.path.abspath(__file__))
 logToFile = 0
 gLogFile = 'log.log'
 gSiteUrl = 'http://www.tmsf.com'
+gJsonUrlFormat = 'http://jia3.tmsf.com/tmj3/property_detail.jspx?json=true&propertyid=%s&siteid=%s'
 gWebLinkScheme = 'http://www.tmsf.com/yh/2018yh/%4d_%d_preview.htm'
 xmlDir = selfDir + '/../xml/'
 jsonFilePath = selfDir + '/../json/estateSaleInfo.json'
@@ -43,9 +44,12 @@ def writeToFile(filePath, str):
 
 def fetchContentFromLink(link, json = False):
     debugTrace('try to find link ' + link)
-    headers = {'User-Agent' : 'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:59.0) Gecko/20100101 Firefox/59.0',
-            'Connection' : 'keep-alive', 'Cache-Control': 'no-cache'}
-    time.sleep(2)
+    headers = {
+        'User-Agent' : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.53 Safari/537.36 Edg/80.0.361.33',
+        'Connection' : 'keep-alive',
+        'Cache-Control': 'no-cache'
+    }
+    time.sleep(5)
     r = requests.get(link, headers = headers)
     if r.status_code == 200:
         if json:
@@ -72,20 +76,21 @@ def findLocation(elem, soup):
             continue
         if elem['name'] != a.string:
             continue
-        pageSoup = fetchContentFromLink(gSiteUrl + a['href'])
-        if pageSoup == None:
+        pagePath = a['href']
+        strs = pagePath.split('_')
+        if len(strs) < 3:
             continue
-        divCont9 = pageSoup.find('div', attrs={'id': 'myCont9'})
-        if divCont9 == None:
-            debugTrace('can not find divCont9')
+        propertyId = strs[2]
+        siteId = strs[1]
+        linkUrl = gJsonUrlFormat % (propertyId, siteId)
+        jsonData = fetchContentFromLink(linkUrl, True)
+        if 'cohProperty' not in jsonData.keys():
             continue
-        queryPRJstr = divCont9.prettify().split('QueryPRJ')[1]
-        debugTrace(queryPRJstr)
-        m = re.match('\(\'.+\',\'(\d+\.\d+)\',\'(\d+\.\d+)\',\'(\d+)\'\)')
-        if len(m.groupdict().keys()) != 2:
+        if ('prjx' not in jsonData['cohProperty']) or ('prjy' not in jsonData['cohProperty']):
             continue
-        elem['location']['location'] = float(m.group(0))
-        elem['location']['latitude'] = float(m.group(1))
+        elem['location']['longitude'] = float(jsonData['cohProperty']['prjx'])
+        elem['location']['latitude'] = float(jsonData['cohProperty']['prjy'])
+        debugTrace('find positon %d' % (elem['location']['longitude']))
         break
     return elem
 
