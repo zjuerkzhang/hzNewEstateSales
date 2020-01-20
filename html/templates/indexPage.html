@@ -12,16 +12,70 @@
     <script type="text/javascript">
 
       function drawEstatePoints(map) {
-        function formatPosition(location) {
-          if (location.latitude == '') {
-            return [];
+        function getIconColor(lotteryState, percentHit) {
+          //console.log(lotteryState);
+          //console.log(lotteryState == '方案公示');
+          table = {
+            '摇号完成': ''
+          };
+          if (lotteryState == '摇号完成') {
+            if (percentHit == '' || percentHit == '/') {
+              return 'blue';
+            }
+            else {
+              return 'red';
+            }
           }
-          return [location.longitude, location.latitude];
+          else {
+            return 'green';
+          }
         }
+
+        function getIconPath(info) {
+          var iconDir = '/static/icon/'
+          var color = getIconColor(info.lotteryState, info.percentHit);
+          var unitPrice = 'x';
+          found = info.unitPrice.match(/(\d{4,5})/);
+          if (found.length > 1) {
+            console.log(found);
+            unitPrice = (parseFloat(found[0])/10000).toString();
+            unitPrice = unitPrice[0];
+          }
+          return iconDir + color + '_' + unitPrice + '.png';
+        }
+
+        function drawPoint(info) {
+          if (info.location.latitude == '') {
+            return;
+          }
+          var oriLnglat = [info.location.longitude, info.location.latitude];
+          var newLnglat;
+          AMap.convertFrom(oriLnglat, 'baidu',
+            function (status, result) {
+              if (result.info === 'ok') {
+                newLnglat = result.locations[0];
+                //console.log(newLnglat);
+                iconPath = getIconPath(info);
+                addMark(map, [newLnglat.getLng(), newLnglat.getLat()], formatTitle(info), iconPath);
+              }
+            });
+        }
+
         function formatTitle(info) {
           return info.name + '\n' +
                   info.unitPrice + '\n' +
                   info.percentHit;
+        }
+
+        function addMark(map, posi, title, iconPath) {
+          var marker = new AMap.Marker(
+            {
+              position: posi,
+              title: title,
+              icon: iconPath
+            }
+          );
+          map.add(marker);
         }
 
         var request = new XMLHttpRequest();
@@ -31,10 +85,7 @@
               var dates = JSON.parse(request.responseText);
               dates['202001'].infos.forEach(
                 function(info) {
-                  position = formatPosition(info.location);
-                  if (position.length == 2) {
-                    addMark(map, position, formatTitle(info));
-                  }
+                  drawPoint(info);
                 }
               );
             }
@@ -42,16 +93,6 @@
         };
         request.open('GET', './static/json/estateSaleInfo.json');
         request.send();
-      }
-
-      function addMark(map, posi, title) {
-        var marker = new AMap.Marker(
-          {
-            position: posi,
-            title: title
-          }
-        );
-        map.add(marker);
       }
 
       var map = new AMap.Map('container', {

@@ -88,9 +88,11 @@ def findLocation(elem, soup):
             continue
         if ('prjx' not in jsonData['cohProperty']) or ('prjy' not in jsonData['cohProperty']):
             continue
+        if (jsonData['cohProperty']['prjx'] == '' or jsonData['cohProperty']['prjy'] == ''):
+            continue
         elem['location']['longitude'] = float(jsonData['cohProperty']['prjx'])
         elem['location']['latitude'] = float(jsonData['cohProperty']['prjy'])
-        debugTrace('find positon %d' % (elem['location']['longitude']))
+        debugTrace('find positon %f' % (elem['location']['longitude']))
         break
     return elem
 
@@ -208,6 +210,7 @@ def isTodayInGivenMonth(month):
 if __name__ == '__main__':
     estateSaleInfo = {}
     oldInfo = loadJsonFile()
+    oldInfo = {}
     month = [2019, 1]
     while not isTodayInGivenMonth(month):
         keyStr = '%4d%02d' % (month[0], month[1])
