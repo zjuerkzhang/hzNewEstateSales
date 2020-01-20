@@ -7,10 +7,13 @@ import time
 import os
 import datetime
 import json
+import re
+import time
 
 selfDir = os.path.dirname(os.path.abspath(__file__))
 logToFile = 0
 gLogFile = 'log.log'
+gSiteUrl = 'http://www.tmsf.com'
 gWebLinkScheme = 'http://www.tmsf.com/yh/2018yh/%4d_%d_preview.htm'
 xmlDir = selfDir + '/../xml/'
 jsonFilePath = selfDir + '/../json/estateSaleInfo.json'
@@ -39,8 +42,10 @@ def writeToFile(filePath, str):
     targetFile.close()
 
 def fetchContentFromLink(link, json = False):
+    debugTrace('try to find link ' + link)
     headers = {'User-Agent' : 'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:59.0) Gecko/20100101 Firefox/59.0',
             'Connection' : 'keep-alive', 'Cache-Control': 'no-cache'}
+    time.sleep(2)
     r = requests.get(link, headers = headers)
     if r.status_code == 200:
         if json:
@@ -49,6 +54,40 @@ def fetchContentFromLink(link, json = False):
             return BeautifulSoup(r.text, 'html5lib')
     else:
         debugTrace("Fail to get %s, status code: %d" % (link, r.status_code))
+        return None
+
+def findLocation(elem, soup):
+    debugTrace(elem['name'])
+    elem['location'] = {
+        'latitude': '',
+        'longitude': ''
+    }
+    divs = soup.find_all('div', attrs={'class': 'bigT'})
+    for div in divs:
+        font = div.find('font', attrs={'class': 'f16 bold'})
+        if font == None:
+            continue
+        a = font.find('a')
+        if a == None:
+            continue
+        if elem['name'] != a.string:
+            continue
+        pageSoup = fetchContentFromLink(gSiteUrl + a['href'])
+        if pageSoup == None:
+            continue
+        divCont9 = pageSoup.find('div', attrs={'id': 'myCont9'})
+        if divCont9 == None:
+            debugTrace('can not find divCont9')
+            continue
+        queryPRJstr = divCont9.prettify().split('QueryPRJ')[1]
+        debugTrace(queryPRJstr)
+        m = re.match('\(\'.+\',\'(\d+\.\d+)\',\'(\d+\.\d+)\',\'(\d+)\'\)')
+        if len(m.groupdict().keys()) != 2:
+            continue
+        elem['location']['location'] = float(m.group(0))
+        elem['location']['latitude'] = float(m.group(1))
+        break
+    return elem
 
 def parseTrToSaleElement(tr):
     elem = {}
@@ -59,10 +98,6 @@ def parseTrToSaleElement(tr):
         for br in brs:
             br.decompose()
         elem[attrNames[i]] = (''.join(map(lambda x: x.string, tds[i].contents)))
-    elem['location'] = {
-        'latitude': '',
-        'longitude': ''
-    }
     return elem
 
 def parseTableHeader(tr):
@@ -97,6 +132,7 @@ def getRealEstateSaleInfoFromPage(pageLink):
     for tr in trs[1:]:
         elem = parseTrToSaleElement(tr)
         if len(elem) != 0:
+            findLocation(elem, soup)
             estateSaleInfo['infos'].append(elem)
     #print(estateSaleInfo)
     return estateSaleInfo
