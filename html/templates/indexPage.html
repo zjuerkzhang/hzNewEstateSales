@@ -8,10 +8,16 @@
     <title>杭州新房销售摇号地图</title>
   </head>
   <body>
+    <div id="controllers">
+      <div>
+        <b>选择月份： </b>
+        <select id='monthSelect' onchange="onMonthSelectChanged()"></select>
+      </div>
+    </div>
     <div id="container"></div>
     <script type="text/javascript">
 
-      function drawEstatePoints(jsonData) {
+      function drawEstatePoints(infoArray) {
         function getIconColor(lotteryState, percentHit) {
           //console.log(lotteryState);
           //console.log(lotteryState == '方案公示');
@@ -69,81 +75,99 @@
           map.add(marker);
         }
 
-        function formatEstateInfo(info) {
-          var formatedInfo = info;
-          var saleNumber = info.saleNumber.match(/\d+/g).join('-');
-          formatedInfo.saleSimpleNumber = saleNumber;
-
-
-          if (info.lotteryState == '摇号完成') {
-            if (info.percentHit == '' || info.percentHit == '/') {
-              formatedInfo.percentHit = "无需摇号";
-            }
-            else {
-              formatedInfo.percentHit = info.percentHit;
-            }
-          }
-          else {
-            formatedInfo.percentHit = "待摇号";
-          }
-          formatedInfo.title = saleNumber + '\n' +
-            info.unitPrice + '\n' +
-            info.fitmentCost + '\n' +
-            formatedInfo.percentHit;
-
-          return formatedInfo;
-        }
-
-        function groupByEstateName(infos) {
-          var infosGrouped = {};
-          infos.forEach(function(info) {
-            if (infosGrouped.hasOwnProperty(info.name)) {
-              infosGrouped[info.name].push(info);
-            }
-            else {
-              infosGrouped[info.name] = [info];
-            }
-          });
-          return infosGrouped;
-        }
-
-        function mergeInfoInOneGroup(group) {
-          if (group.length == 0) {
-            return []
-          }
-          else if (group.length == 1) {
-            return group[0];
-          }
-          else {
-            var mergedInfo;
-            group.sort(function(info1, info2) {
-              if (info1.saleSimpleNumber < info2.saleSimpleNumber) {
-                return -1;
-              }
-              else {
-                return 1;
-              }
-            }).forEach(function(info) {
-              if (mergedInfo == undefined) {
-                mergedInfo = info;
-              }
-              else {
-                mergedInfo.lotteryState = info.lotteryState;
-                mergedInfo.unitPrice = info.unitPrice;
-                mergedInfo.title = mergedInfo.title + '\n\n' + info.title;
-              }
-            });
-          }
-          return mergedInfo;
-        }
-
         var map = new AMap.Map('container', {
           zoom:10,//级别
           center: [120.163302,30.271009]//中心点坐标
         });
+        infoArray.forEach(
+          function(info) {
+            drawPoint(info);
+          }
+        );
+      }
 
-        formatedInfos = Object.values(jsonData).map(function(monthEntry) {
-          return monthEntry.infos;
+      function formatEstateInfo(info) {
+        var formatedInfo = info;
+        var saleNumber = info.saleNumber.match(/\d+/g).join('-');
+        formatedInfo.saleSimpleNumber = saleNumber;
+        if (info.lotteryState == '摇号完成') {
+          if (info.percentHit == '' || info.percentHit == '/') {
+            formatedInfo.percentHit = "无需摇号";
+          }
+          else {
+            formatedInfo.percentHit = info.percentHit;
+          }
+        }
+        else {
+          formatedInfo.percentHit = "待摇号";
+        }
+        formatedInfo.title = saleNumber + '\n' +
+          info.month + '\n' +
+          info.unitPrice + '\n' +
+          info.fitmentCost + '\n' +
+          formatedInfo.percentHit;
+        return formatedInfo;
+      }
+      function groupByEstateName(infos) {
+        var infosGrouped = {};
+        infos.forEach(function(info) {
+          if (infosGrouped.hasOwnProperty(info.name)) {
+            infosGrouped[info.name].push(info);
+          }
+          else {
+            infosGrouped[info.name] = [info];
+          }
+        });
+        return infosGrouped;
+      }
+      function mergeInfoInOneGroup(group) {
+        if (group.length == 0) {
+          return []
+        }
+        else if (group.length == 1) {
+          return group[0];
+        }
+        else {
+          var mergedInfo;
+          group.sort(function(info1, info2) {
+            if (info1.saleSimpleNumber < info2.saleSimpleNumber) {
+              return -1;
+            }
+            else {
+              return 1;
+            }
+          }).forEach(function(info) {
+            if (mergedInfo == undefined) {
+              mergedInfo = info;
+            }
+            else {
+              mergedInfo.lotteryState = info.lotteryState;
+              mergedInfo.unitPrice = info.unitPrice;
+              mergedInfo.percentHit = info.percentHit;
+              mergedInfo.title = mergedInfo.title + '\n\n' + info.title;
+            }
+          });
+        }
+        return mergedInfo;
+      }
+
+      function pickupJsonDataAndFormat(jsonData, months) {
+        if (!Array.isArray(months)) {
+          months = [months];
+        }
+
+        pickedUpJsonData = {};
+        for (let [key, value] of Object.entries(jsonData) ) {
+          if (months.find(function (m) { return m == key}) != undefined) {
+            pickedUpJsonData[key] = value;
+          }
+        }
+
+        formatedInfos = Object.values(pickedUpJsonData).map(function(monthEntry) {
+          return monthEntry.infos.map(function(info) {
+            info.month = monthEntry.year.toString() + monthEntry.month.toString().padStart(2, '0');
+            return info;
+          });
         }).flat().map(function(info) {
           return formatEstateInfo(info);
         });
@@ -152,12 +176,27 @@
         mergedInfos = Object.values(groups).map(function(group) {
           return mergeInfoInOneGroup(group);
         });
-        mergedInfos.forEach(
-          function(info) {
-            drawPoint(info);
-          }
-        );
+        return mergedInfos;
       }
+
+      function fillMonthSelect(months) {
+        var selectObj = document.getElementById("monthSelect");
+        months.forEach(function(month) {
+          var op = document.createElement("option");
+              op.text = month;
+              selectObj.options.add(op)
+        });
+        selectObj.options.item(months.length-1).selected = "selected";
+      }
+
+      function onMonthSelectChanged() {
+        var selectObj = document.getElementById("monthSelect");
+        var month = selectObj.options.item(selectObj.selectedIndex).text;
+        infoArray = pickupJsonDataAndFormat(gJsonData, month);
+        drawEstatePoints(infoArray);
+      }
+
+
 
       var gJsonData = {};
       var request = new XMLHttpRequest();
@@ -166,7 +205,10 @@
           if (request.status === 200 || request.status === 304 ) {
             var jsonData = JSON.parse(request.responseText);
             gJsonData = jsonData;
-            drawEstatePoints(jsonData);
+            fillMonthSelect(Object.keys(jsonData));
+            latestMonth = Object.keys(jsonData).sort().pop();
+            infoArray = pickupJsonDataAndFormat(jsonData, latestMonth);
+            drawEstatePoints(infoArray);
           }
         }
       };
