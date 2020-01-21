@@ -11,15 +11,12 @@
     <div id="container"></div>
     <script type="text/javascript">
 
-      function drawEstatePoints(map) {
+      function drawEstatePoints(jsonData) {
         function getIconColor(lotteryState, percentHit) {
           //console.log(lotteryState);
           //console.log(lotteryState == '方案公示');
-          table = {
-            '摇号完成': ''
-          };
           if (lotteryState == '摇号完成') {
-            if (percentHit == '' || percentHit == '/') {
+            if (percentHit == '无需摇号') {
               return 'blue';
             }
             else {
@@ -37,7 +34,7 @@
           var unitPrice = 'x';
           found = info.unitPrice.match(/(\d{4,5})/);
           if (found.length > 1) {
-            console.log(found);
+            //console.log(found);
             unitPrice = (parseFloat(found[0])/10000).toString();
             unitPrice = unitPrice[0];
           }
@@ -56,15 +53,9 @@
                 newLnglat = result.locations[0];
                 //console.log(newLnglat);
                 iconPath = getIconPath(info);
-                addMark(map, [newLnglat.getLng(), newLnglat.getLat()], formatTitle(info), iconPath);
+                addMark(map, [newLnglat.getLng(), newLnglat.getLat()], info.name + '\n\n' + info.title, iconPath);
               }
             });
-        }
-
-        function formatTitle(info) {
-          return info.name + '\n' +
-                  info.unitPrice + '\n' +
-                  info.percentHit;
         }
 
         function addMark(map, posi, title, iconPath) {
@@ -78,28 +69,110 @@
           map.add(marker);
         }
 
-        var request = new XMLHttpRequest();
-        request.onreadystatechange = function (){
-          if (request.readyState === 4) {
-            if (request.status === 200 || request.status === 304 ) {
-              var dates = JSON.parse(request.responseText);
-              dates['202001'].infos.forEach(
-                function(info) {
-                  drawPoint(info);
-                }
-              );
+        function formatEstateInfo(info) {
+          var formatedInfo = info;
+          var saleNumber = info.saleNumber.match(/\d+/g).join('-');
+          formatedInfo.saleSimpleNumber = saleNumber;
+
+
+          if (info.lotteryState == '摇号完成') {
+            if (info.percentHit == '' || info.percentHit == '/') {
+              formatedInfo.percentHit = "无需摇号";
+            }
+            else {
+              formatedInfo.percentHit = info.percentHit;
             }
           }
-        };
-        request.open('GET', './static/json/estateSaleInfo.json');
-        request.send();
+          else {
+            formatedInfo.percentHit = "待摇号";
+          }
+          formatedInfo.title = saleNumber + '\n' +
+            info.unitPrice + '\n' +
+            info.fitmentCost + '\n' +
+            formatedInfo.percentHit;
+
+          return formatedInfo;
+        }
+
+        function groupByEstateName(infos) {
+          var infosGrouped = {};
+          infos.forEach(function(info) {
+            if (infosGrouped.hasOwnProperty(info.name)) {
+              infosGrouped[info.name].push(info);
+            }
+            else {
+              infosGrouped[info.name] = [info];
+            }
+          });
+          return infosGrouped;
+        }
+
+        function mergeInfoInOneGroup(group) {
+          if (group.length == 0) {
+            return []
+          }
+          else if (group.length == 1) {
+            return group[0];
+          }
+          else {
+            var mergedInfo;
+            group.sort(function(info1, info2) {
+              if (info1.saleSimpleNumber < info2.saleSimpleNumber) {
+                return -1;
+              }
+              else {
+                return 1;
+              }
+            }).forEach(function(info) {
+              if (mergedInfo == undefined) {
+                mergedInfo = info;
+              }
+              else {
+                mergedInfo.lotteryState = info.lotteryState;
+                mergedInfo.unitPrice = info.unitPrice;
+                mergedInfo.title = mergedInfo.title + '\n\n' + info.title;
+              }
+            });
+          }
+          return mergedInfo;
+        }
+
+        var map = new AMap.Map('container', {
+          zoom:10,//级别
+          center: [120.163302,30.271009]//中心点坐标
+        });
+
+        formatedInfos = Object.values(jsonData).map(function(monthEntry) {
+          return monthEntry.infos;
+        }).flat().map(function(info) {
+          return formatEstateInfo(info);
+        });
+        groups = groupByEstateName(formatedInfos);
+        //console.log(groups);
+        mergedInfos = Object.values(groups).map(function(group) {
+          return mergeInfoInOneGroup(group);
+        });
+        mergedInfos.forEach(
+          function(info) {
+            drawPoint(info);
+          }
+        );
       }
 
-      var map = new AMap.Map('container', {
-        zoom:10,//级别
-        center: [120.163302,30.271009]//中心点坐标
-      });
-      drawEstatePoints(map)
+      var gJsonData = {};
+      var request = new XMLHttpRequest();
+      request.onreadystatechange = function (){
+        if (request.readyState === 4) {
+          if (request.status === 200 || request.status === 304 ) {
+            var jsonData = JSON.parse(request.responseText);
+            gJsonData = jsonData;
+            drawEstatePoints(jsonData);
+          }
+        }
+      };
+      request.open('GET', './static/json/estateSaleInfo.json');
+      request.send();
+
     </script>
   </body>
 </html>
