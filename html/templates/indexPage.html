@@ -10,14 +10,29 @@
   <body>
     <div id="controllers">
       <div>
+        <table border="0">
+          <tr>
+            <td><img src="/static/icon/red_x.png"></img></td>
+            <td>需摇号</td>
+            <td><img src="/static/icon/blue_x.png"></img></td>
+            <td>无需摇号</td>
+            <td><img src="/static/icon/green_x.png"></img></td>
+            <td>待摇号</td>
+          </tr>
+        </table>
+
+      </div>
+      <div>
         <b>选择月份： </b>
-        <select id='monthSelect' onchange="onMonthSelectChanged()"></select>
+        <select id='monthSelect' onchange="onSelectChanged()"></select>
+        <b>选择区域： </b>
+        <select id='areaSelect' onchange="onSelectChanged()"></select>
       </div>
     </div>
     <div id="container"></div>
     <script type="text/javascript">
 
-      function drawEstatePoints(infoArray) {
+      function drawEstatePoints(map, infoArray) {
         function getIconColor(lotteryState, percentHit) {
           //console.log(lotteryState);
           //console.log(lotteryState == '方案公示');
@@ -39,6 +54,10 @@
           var color = getIconColor(info.lotteryState, info.percentHit);
           var unitPrice = 'x';
           found = info.unitPrice.match(/(\d{4,5})/);
+          if (found == undefined) {
+            console.log(info.name);
+            return iconDir + color + '_' + unitPrice + '.png';
+          }
           if (found.length > 1) {
             //console.log(found);
             unitPrice = (parseFloat(found[0])/10000).toString();
@@ -47,7 +66,7 @@
           return iconDir + color + '_' + unitPrice + '.png';
         }
 
-        function drawPoint(info) {
+        function drawPoint(map, info) {
           if (info.location.latitude == '') {
             return;
           }
@@ -72,16 +91,14 @@
               icon: iconPath
             }
           );
+          markers.push(marker);
           map.add(marker);
         }
 
-        var map = new AMap.Map('container', {
-          zoom:10,//级别
-          center: [120.163302,30.271009]//中心点坐标
-        });
+
         infoArray.forEach(
           function(info) {
-            drawPoint(info);
+            drawPoint(map, info);
           }
         );
       }
@@ -151,10 +168,11 @@
         return mergedInfo;
       }
 
-      function pickupJsonDataAndFormat(jsonData, months) {
-        if (!Array.isArray(months)) {
-          months = [months];
-        }
+      function pickupJsonDataAndFormat(jsonData) {
+        var selectObj = document.getElementById("monthSelect");
+        var month = selectObj.options.item(selectObj.selectedIndex).text;
+
+        months = [month];
 
         pickedUpJsonData = {};
         for (let [key, value] of Object.entries(jsonData) ) {
@@ -179,6 +197,34 @@
         return mergedInfos;
       }
 
+      function filterByArea(infoArray) {
+        var selectObj = document.getElementById("areaSelect");
+        var area = selectObj.options.item(selectObj.selectedIndex).text;
+        var areas = [];
+        if (area == '全市') {
+          return infoArray;
+        }
+        else if (area == '主城区') {
+          areas = mainCityAreas;
+        }
+        else {
+          areas = [area];
+        }
+
+        return infoArray.filter(function(info) {
+          if (info.distArea == '') {
+            console.log('No area info for ' + info.name);
+            return false;
+          }
+          if (areas.find(function(a) { return a == info.distArea;}) != undefined) {
+            return true;
+          }
+          else {
+            return false;
+          }
+        });
+      }
+
       function fillMonthSelect(months) {
         var selectObj = document.getElementById("monthSelect");
         months.forEach(function(month) {
@@ -189,14 +235,31 @@
         selectObj.options.item(months.length-1).selected = "selected";
       }
 
-      function onMonthSelectChanged() {
-        var selectObj = document.getElementById("monthSelect");
-        var month = selectObj.options.item(selectObj.selectedIndex).text;
-        infoArray = pickupJsonDataAndFormat(gJsonData, month);
-        drawEstatePoints(infoArray);
+      function fillAreaSelect() {
+        var selectObj = document.getElementById("areaSelect");
+        areaOptions.forEach(function(area) {
+          var op = document.createElement("option");
+              op.text = area;
+              selectObj.options.add(op)
+        });
+        selectObj.options.item(0).selected = "selected";
       }
 
+      function onSelectChanged() {
+        infoArray = pickupJsonDataAndFormat(gJsonData);
+        filteredInfoArray = filterByArea(infoArray);
+        map.remove(markers);
+        drawEstatePoints(map, filteredInfoArray);
+      }
 
+      var areaOptions = ['全市', '主城区', '余杭', '临安', '富阳', '萧山'];
+      var mainCityAreas = ['西湖', '拱墅', '上城', '下城', '滨江', '江干', '之江', '下沙', '大江东', '钱塘新区'];
+      fillAreaSelect();
+      var map = new AMap.Map('container', {
+        zoom:10,//级别
+        center: [120.163302,30.271009]//中心点坐标
+      });
+      var markers = [];
 
       var gJsonData = {};
       var request = new XMLHttpRequest();
@@ -206,9 +269,9 @@
             var jsonData = JSON.parse(request.responseText);
             gJsonData = jsonData;
             fillMonthSelect(Object.keys(jsonData));
-            latestMonth = Object.keys(jsonData).sort().pop();
-            infoArray = pickupJsonDataAndFormat(jsonData, latestMonth);
-            drawEstatePoints(infoArray);
+            infoArray = pickupJsonDataAndFormat(jsonData);
+            filteredInfoArray = filterByArea(infoArray);
+            drawEstatePoints(map, filteredInfoArray);
           }
         }
       };

@@ -210,7 +210,7 @@ def isTodayInGivenMonth(month):
 if __name__ == '__main__':
     estateSaleInfo = {}
     oldInfo = loadJsonFile()
-    oldInfo = {}
+    #oldInfo = {}
     month = [2019, 1]
     while not isTodayInGivenMonth(month):
         keyStr = '%4d%02d' % (month[0], month[1])
